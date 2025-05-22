@@ -11,7 +11,7 @@ BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 
 class Fish:
     def __init__(self):
-        self.x_position = 0
+        self.x_position = 50
         self.y_position = WINDOW_HEIGHT/2
         self.image = pygame.image.load(os.path.join("images","flappy.png"))
         self.velocity = 0
@@ -41,6 +41,14 @@ class Fish:
     def get_mask(self):
         return pygame.mask.from_surface(self.image)
 
+    def check_base_collision(self, base):
+        return self.y_position + self.image.get_height() >= base.y_position
+
+    def check_pipe_collision(self, pipe):
+        fish_mask = self.get_mask()
+        pipe_mask = pipe.get_mask()
+        offset = (pipe.x_position - self.x_position, pipe.y_position - self.y_position)
+        return fish_mask.overlap(pipe_mask, offset)
 
 class Pipe:
     GAP = 200
@@ -48,7 +56,7 @@ class Pipe:
         self.x_position = x
         self.image = pygame.image.load(os.path.join("images","double_sided_pipe.png"))
         self.y_position = random.randint(1, 300)
-        self.y_position -= 400
+        self.y_position -= 450
         self.velocity = 5
 
 
@@ -59,12 +67,27 @@ class Pipe:
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
 
+    def get_mask(self):
+        return pygame.mask.from_surface(self.image)
 
-def draw_window(win, fish, pipes):
+
+class Base:
+    def __init__(self):
+        self.image = pygame.image.load(os.path.join("images","base.png"))
+        self.x_position = 0
+        self.y_position = WINDOW_HEIGHT-self.image.get_height()
+        self.velocity = 5
+
+    def draw(self, win):
+        win.blit(self.image, (self.x_position, self.y_position))
+
+def draw_window(win, fish, pipes, base, text):
     win.blit(BACKGROUND_IMG, (0,0))
-    fish.draw(win)
     for pipe in pipes:
         pipe.draw(win)
+    base.draw(win)
+    fish.draw(win)
+    win.blit(text, (WINDOW_WIDTH-150, 30))
     pygame.display.update()
 
 def main():
@@ -73,10 +96,16 @@ def main():
     pipes = []
     pipe = Pipe(WINDOW_WIDTH)
     pipes.append(pipe)
+    base = Base()
     clock = pygame.time.Clock()
+    score = 0
 
     last_time = 0
     interval = 3000
+
+    pygame.font.init()
+    font = pygame.font.SysFont("Arial", 32)
+    text_surface = font.render(f"Score: {score}", True, (255, 255, 255))
 
     runs = True
     while runs:
@@ -91,13 +120,15 @@ def main():
 
         fish.move()
 
+        if fish.check_base_collision(base):
+            runs = False
+
         current_time = pygame.time.get_ticks()
 
         if current_time - last_time > interval:
             new_pipe = Pipe(WINDOW_WIDTH)
             pipes.append(new_pipe)
             last_time = current_time
-            print("nowa rura")
 
         to_remove = []
         for pipe in pipes:
@@ -105,12 +136,19 @@ def main():
             if pipe.x_position + pipe.image.get_width() < 0:
                 to_remove.append(pipe)
 
+            if fish.check_pipe_collision(pipe):
+                runs = False
+
+            if (pipe.x_position + pipe.image.get_width()) == fish.x_position:
+                score += 1
+                text_surface = font.render(f"Score: {score}", True, (255, 255, 255))
+
         for pipe in to_remove:
             pipes.remove(pipe)
 
         to_remove.clear()
 
-        draw_window(window, fish, pipes)
+        draw_window(window, fish, pipes, base, text_surface)
 
     pygame.quit()
     quit()
