@@ -81,14 +81,23 @@ class Base:
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
 
-def draw_window(win, fish, pipes, base, text):
+def draw_window(win, fish, pipes, base, score):
     win.blit(BACKGROUND_IMG, (0,0))
     for pipe in pipes:
         pipe.draw(win)
     base.draw(win)
     fish.draw(win)
+    font = pygame.font.SysFont("Arial", 32)
+    text_surface = font.render(f"Score: {score}", True, (255, 255, 255))
+    text = font.render(f"Score: {score}", True, (255, 255, 255))
     win.blit(text, (WINDOW_WIDTH-150, 30))
     pygame.display.update()
+
+def restart(fish, pipes):
+    fish.x_position = 50
+    fish.y_position = WINDOW_HEIGHT/2
+    pipes.clear()
+
 
 def main():
     window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -104,51 +113,64 @@ def main():
     interval = 3000
 
     pygame.font.init()
-    font = pygame.font.SysFont("Arial", 32)
-    text_surface = font.render(f"Score: {score}", True, (255, 255, 255))
 
     runs = True
+    playing = True
     while runs:
-        clock.tick(30)
+        while playing:
+            clock.tick(30)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    runs = False
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        fish.jump()
+
+            fish.move()
+
+            if fish.check_base_collision(base):
+                playing = False
+
+            current_time = pygame.time.get_ticks()
+
+            if current_time - last_time > interval:
+                new_pipe = Pipe(WINDOW_WIDTH)
+                pipes.append(new_pipe)
+                last_time = current_time
+
+            to_remove = []
+            for pipe in pipes:
+                pipe.move()
+                if pipe.x_position + pipe.image.get_width() < 0:
+                    to_remove.append(pipe)
+
+                if fish.check_pipe_collision(pipe):
+                    playing = False
+
+                if (pipe.x_position + pipe.image.get_width()) == fish.x_position:
+                    score += 1
+
+            for pipe in to_remove:
+                pipes.remove(pipe)
+
+            to_remove.clear()
+            draw_window(window, fish, pipes, base, score)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 runs = False
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
-                    fish.jump()
+                    restart(fish, pipes)
+                    score = 0
+                    playing = True
+                else:
+                    runs = False
 
-        fish.move()
 
-        if fish.check_base_collision(base):
-            runs = False
-
-        current_time = pygame.time.get_ticks()
-
-        if current_time - last_time > interval:
-            new_pipe = Pipe(WINDOW_WIDTH)
-            pipes.append(new_pipe)
-            last_time = current_time
-
-        to_remove = []
-        for pipe in pipes:
-            pipe.move()
-            if pipe.x_position + pipe.image.get_width() < 0:
-                to_remove.append(pipe)
-
-            if fish.check_pipe_collision(pipe):
-                runs = False
-
-            if (pipe.x_position + pipe.image.get_width()) == fish.x_position:
-                score += 1
-                text_surface = font.render(f"Score: {score}", True, (255, 255, 255))
-
-        for pipe in to_remove:
-            pipes.remove(pipe)
-
-        to_remove.clear()
-
-        draw_window(window, fish, pipes, base, text_surface)
+        draw_window(window, fish, pipes, base, score)
 
     pygame.quit()
     quit()
