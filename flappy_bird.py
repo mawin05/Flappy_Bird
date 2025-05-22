@@ -12,7 +12,7 @@ BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 class Fish:
     def __init__(self):
         self.x_position = 50
-        self.y_position = WINDOW_HEIGHT/2
+        self.y_position = WINDOW_HEIGHT/3
         self.image = pygame.image.load(os.path.join("images","flappy.png"))
         self.velocity = 0
         self.tick_count = 0
@@ -95,7 +95,7 @@ def draw_window(win, fish, pipes, base, score):
 
 def restart(fish, pipes):
     fish.x_position = 50
-    fish.y_position = WINDOW_HEIGHT/2
+    fish.y_position = WINDOW_HEIGHT/3
     pipes.clear()
 
 
