@@ -45,29 +45,44 @@ class Fish:
 
     def check_pipe_collision(self, pipe):
         fish_mask = self.get_mask()
-        pipe_mask = pipe.get_mask()
-        offset = (pipe.x_position - self.x_position, pipe.y_position - self.y_position)
-        return fish_mask.overlap(pipe_mask, offset)
+        upper_pipe_mask = pipe.get_upper_mask()
+        bottom_pipe_mask = pipe.get_bottom_mask()
+        upper_offset = (pipe.x_position - self.x_position, pipe.upper_y_position - self.y_position)
+        bottom_offset = (pipe.x_position - self.x_position, pipe.bottom_y_position - self.y_position)
+        return fish_mask.overlap(upper_pipe_mask, upper_offset) or fish_mask.overlap(bottom_pipe_mask, bottom_offset)
 
 
 class Pipe:
-    GAP = 200
+    GAP = 220
+    UPPER_LIMIT = 50    # górna granica ograniczająca pozycję rury
+    BOTTOM_LIMIT = 320  # dolna granica
 
     def __init__(self, x):
         self.x_position = x
-        self.image = pygame.image.load(os.path.join("images", "double_sided_pipe.png"))
-        self.y_position = random.randint(1, 300)
-        self.y_position -= 450
+        self.bottom_image = pygame.image.load(os.path.join("images", "pipe.png"))
+        self.upper_image = pygame.transform.flip(self.bottom_image, False, True)
+        height = self.upper_image.get_height()
+        self.upper_y_position = random.randint(Pipe.UPPER_LIMIT-height, Pipe.BOTTOM_LIMIT-height)
+        self.bottom_y_position = self.upper_y_position + Pipe.GAP + self.upper_image.get_height()
         self.velocity = 5
 
     def move(self):
         self.x_position -= self.velocity
 
     def draw(self, win):
-        win.blit(self.image, (self.x_position, self.y_position))
+        win.blit(self.upper_image, (self.x_position, self.upper_y_position))
+        win.blit(self.bottom_image, (self.x_position, self.bottom_y_position))
 
-    def get_mask(self):
-        return pygame.mask.from_surface(self.image)
+    def get_upper_mask(self):
+        return pygame.mask.from_surface(self.upper_image)
+
+    def get_bottom_mask(self):
+        return pygame.mask.from_surface(self.bottom_image)
+
+    def get_borders(self):
+        top_pipe_border = self.upper_y_position + self.upper_image.get_height()
+        bottom_pipe_border = self.bottom_y_position
+        return top_pipe_border, bottom_pipe_border
 
 
 class Base:
@@ -101,12 +116,13 @@ class Game:
 
     def get_state(self):
         pipe = self.pipes[0]
+        top, bottom = pipe.get_borders()
         return [
             self.fish.y_position,
             self.fish.velocity,
             pipe.x_position - self.fish.x_position,
-            pipe.y_position + pipe.image.get_height(),  # dolna krawędź górnej rury
-            pipe.y_position + Pipe.GAP + pipe.image.get_height()  # górna krawędź dolnej rury
+            top,  # dolna krawędź górnej rury
+            bottom  # górna krawędź dolnej rury
         ]
 
     def restart(self):
@@ -153,19 +169,20 @@ class Game:
         to_remove = []
         for pipe in self.pipes:
             pipe.move()
-            if pipe.x_position + pipe.image.get_width() < 0:
+            if pipe.x_position + pipe.upper_image.get_width() < 0:
                 to_remove.append(pipe)
 
             if self.fish.check_pipe_collision(pipe):
                 self.playing = False
 
-            if (pipe.x_position + pipe.image.get_width()) == self.fish.x_position:
+            if (pipe.x_position + pipe.upper_image.get_width()) == self.fish.x_position:
                 self.score += 1
 
         for pipe in to_remove:
             self.pipes.remove(pipe)
 
-        print(self.pipes)
+        #print(self.pipes)
+        print(self.get_state())
 
     def draw(self):
         self.window.blit(BACKGROUND_IMG, (0, 0))
@@ -177,6 +194,7 @@ class Game:
         text_surface = font.render(f"Score: {self.score}", True, (255, 255, 255))
         text = font.render(f"Score: {self.score}", True, (255, 255, 255))
         self.window.blit(text, (WINDOW_WIDTH - 150, 30))
+        #pygame.draw.line(self.window, (255, 0, 0), (0, 350), (WINDOW_WIDTH, 350), 2)
         pygame.display.update()
 
     def game_loop(self):
