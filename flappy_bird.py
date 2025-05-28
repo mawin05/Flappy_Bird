@@ -100,21 +100,34 @@ class Game:
         self.score = 0
 
         self.last_time = 0
-        self.interval = 2500
+        self.interval = 2750
 
         self.runs = True
         self.playing = True
 
     def get_state(self):
-        pipe = self.pipes[0]
-        top, bottom = pipe.get_borders()
+        pipe = self.closestPipe() # rura, która jest najbliżej, ale której nie minął agent
+        top, _ = pipe.get_borders()
         return [
-            self.fish.y_position,
-            self.fish.velocity,
-            pipe.x_position - self.fish.x_position,
+            self.fish.y_position, # wysokość agenta
+            self.fish.velocity, # prędkość agenta
+            pipe.x_position - self.fish.x_position, # odległość między agenetem a najbliższą rurą
             top,  # dolna krawędź górnej rury
-            bottom  # górna krawędź dolnej rury
         ]
+        # górna krawędź dolnej rury się nie przyda, ponieważ jest to rzecz zależna od
+        # dolnej krawędzi górnej rury, jest to więc dwukrotnie przekazywana ta sama informacja
+
+    def closestPipe(self):
+        # funkcja ta zwraca najbliższą rurę, której agent jeszcze nie minął
+        # oryginalnie zwracała zawsze pierwszą rurę, lecz był krótki moment kiedy agent mijał
+        # pierwszą rurę i czekał aż ona zniknie z ekranu by dostać informacje o rurze przed sobą
+        # tu ten problem jest rozwiązany, w momencie w którym agent nie może zginąć przez 1 rurę,
+        # dostaje informacje o położeniu kolejnej
+        pipeWidth = 125
+        for pipe in self.pipes:
+            if pipe.x_position - self.fish.x_position > -pipeWidth:
+                return pipe
+        return pipes[0]
 
     def restart(self):
         self.fish = Fish()
