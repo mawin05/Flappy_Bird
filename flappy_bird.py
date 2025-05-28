@@ -14,25 +14,16 @@ class Fish:
         self.x_position = 50
         self.y_position = WINDOW_HEIGHT / 3
         self.image = pygame.image.load(os.path.join("images", "flappy.png"))
-        self.velocity = 0
-        self.tick_count = 0
+        self.velocity = -18
+        self.acceleration = 2
         self.alive = True
 
     def jump(self):
-        self.velocity = -10.5
-        self.tick_count = 0
+        self.velocity = -18
 
     def move(self):
-        self.tick_count += 1
-        d = self.velocity * self.tick_count + 1.5 * self.tick_count ** 2
-
-        if d >= 16:
-            d = 16
-
-        if d < 0:
-            d -= 2
-
-        self.y_position += d
+        self.y_position += self.velocity
+        self.velocity += self.acceleration
 
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
@@ -109,7 +100,7 @@ class Game:
         self.score = 0
 
         self.last_time = 0
-        self.interval = 3000
+        self.interval = 2500
 
         self.runs = True
         self.playing = True
