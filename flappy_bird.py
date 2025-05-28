@@ -25,6 +25,9 @@ class Fish:
         self.y_position += self.velocity
         self.velocity += self.acceleration
 
+        if self.velocity >= 20:
+            self.velocity = 20
+
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
 
@@ -42,6 +45,8 @@ class Fish:
         bottom_offset = (pipe.x_position - self.x_position, pipe.bottom_y_position - self.y_position)
         return fish_mask.overlap(upper_pipe_mask, upper_offset) or fish_mask.overlap(bottom_pipe_mask, bottom_offset)
 
+    def check_roof_collision(self):
+        return self.y_position <= 0
 
 class Pipe:
     GAP = 220
@@ -127,7 +132,7 @@ class Game:
         for pipe in self.pipes:
             if pipe.x_position - self.fish.x_position > -pipeWidth:
                 return pipe
-        return pipes[0]
+        return self.pipes[0]
 
     def restart(self):
         self.fish = Fish()
@@ -160,7 +165,7 @@ class Game:
 
         self.fish.move()
 
-        if self.fish.check_base_collision(self.base):
+        if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
             self.playing = False
 
         current_time = pygame.time.get_ticks()
