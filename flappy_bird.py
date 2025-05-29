@@ -1,6 +1,8 @@
 import pygame
 import random
 import os
+import math
+from Agent import Agent
 
 from pygame.math import VectorElementwiseProxy
 
@@ -110,6 +112,10 @@ class Game:
         self.runs = True
         self.playing = True
 
+        self.agent = Agent(input_dim=4, output_dim=2)
+        self.previous_state = self.get_state()
+        self.previous_action = None
+
     def get_state(self):
         pipe = self.closestPipe() # rura, która jest najbliżej, ale której nie minął agent
         top, _ = pipe.get_borders()
@@ -117,7 +123,7 @@ class Game:
             self.fish.y_position, # wysokość agenta
             self.fish.velocity, # prędkość agenta
             pipe.x_position - self.fish.x_position, # odległość między agenetem a najbliższą rurą
-            top,  # dolna krawędź górnej rury
+            top - self.fish.y_position,  # różnica wysokości między agentem a dolną krawędzią górnej rury
         ]
         # górna krawędź dolnej rury się nie przyda, ponieważ jest to rzecz zależna od
         # dolnej krawędzi górnej rury, jest to więc dwukrotnie przekazywana ta sama informacja
@@ -128,7 +134,7 @@ class Game:
         # pierwszą rurę i czekał aż ona zniknie z ekranu by dostać informacje o rurze przed sobą
         # tu ten problem jest rozwiązany, w momencie w którym agent nie może zginąć przez 1 rurę,
         # dostaje informacje o położeniu kolejnej
-        pipeWidth = 125
+        pipeWidth = self.pipes[0].upper_image.get_width()
         for pipe in self.pipes:
             if pipe.x_position - self.fish.x_position > -pipeWidth:
                 return pipe
@@ -141,6 +147,8 @@ class Game:
         self.score = 0
         self.last_time = pygame.time.get_ticks()
         self.playing = True
+        self.previous_state = self.get_state()
+        self.previous_action = None
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -162,10 +170,22 @@ class Game:
             return
 
         self.clock.tick(30)
+        current_state = self.get_state()
+
+        action = self.agent.select_action(current_state)
+        if action == 1:
+            self.fish.jump()
 
         self.fish.move()
 
+        # defaultowo agent dostaje trochę punktów za przetrwanie
+        reward = 0.1
+        done = False
+
         if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
+            # jeżeli agent uderzy w barierkę dostaje dużą karę
+            reward = -5
+            done = True
             self.playing = False
 
         current_time = pygame.time.get_ticks()
@@ -182,16 +202,40 @@ class Game:
                 to_remove.append(pipe)
 
             if self.fish.check_pipe_collision(pipe):
+                # jeżeli agent uderzy w rurę, dostaje karę, która zależy od odległości jego od środka szpary
+
+                f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
+                p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
+
+                reward = -1 + -4 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
+                print(reward)
+                done = True
                 self.playing = False
 
             if (pipe.x_position + pipe.upper_image.get_width()) == self.fish.x_position:
+                # jeżeli agent przejdzie szparę, dostaje dużą nagrodę
                 self.score += 1
+                reward = 5
 
         for pipe in to_remove:
             self.pipes.remove(pipe)
 
+        # dodanie wpisu stanu, akcji i jej konsekwencji do bufora pamięci oraz trenowanie agenta
+        if self.previous_action is not None:
+            self.agent.replay_buffer.push(
+                (self.previous_state,
+                self.previous_action,
+                current_state,
+                reward,
+                done)
+            )
+            self.agent.train()
+
+        self.previous_state = current_state
+        self.previous_action = action
+
         #print(self.pipes)
-        print(self.get_state())
+        #print(self.get_state())
 
     def draw(self):
         self.window.blit(BACKGROUND_IMG, (0, 0))
@@ -208,6 +252,8 @@ class Game:
 
     def game_loop(self):
         while self.runs:
+            if not self.playing:
+                self.restart()
             self.handle_events()
             self.update()
             self.draw()
