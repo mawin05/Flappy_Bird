@@ -2,6 +2,9 @@ import pygame
 import random
 import os
 import math
+
+import torch
+
 from Agent import Agent
 
 from pygame.math import VectorElementwiseProxy
@@ -9,6 +12,8 @@ from pygame.math import VectorElementwiseProxy
 WINDOW_HEIGHT = 750
 WINDOW_WIDTH = 550
 BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
+SPEED = 1
+best_score = 0
 
 
 class Fish:
@@ -16,8 +21,8 @@ class Fish:
         self.x_position = 50
         self.y_position = WINDOW_HEIGHT / 3
         self.image = pygame.image.load(os.path.join("images", "flappy.png"))
-        self.velocity = -18
-        self.acceleration = 2
+        self.velocity = -18 # zmiana z -18 na -36
+        self.acceleration = 2 * SPEED # zmiana z 2 na 4
         self.alive = True
 
     def jump(self):
@@ -27,8 +32,8 @@ class Fish:
         self.y_position += self.velocity
         self.velocity += self.acceleration
 
-        if self.velocity >= 20:
-            self.velocity = 20
+        if self.velocity >= 20 * SPEED:  # zmiana z 20 na 40
+            self.velocity = 20 * SPEED
 
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
@@ -50,9 +55,10 @@ class Fish:
     def check_roof_collision(self):
         return self.y_position <= 0
 
+
 class Pipe:
-    GAP = 220
-    UPPER_LIMIT = 50    # górna granica ograniczająca pozycję rury
+    GAP = 250
+    UPPER_LIMIT = 50  # górna granica ograniczająca pozycję rury
     BOTTOM_LIMIT = 320  # dolna granica
 
     def __init__(self, x):
@@ -60,9 +66,10 @@ class Pipe:
         self.bottom_image = pygame.image.load(os.path.join("images", "pipe.png"))
         self.upper_image = pygame.transform.flip(self.bottom_image, False, True)
         height = self.upper_image.get_height()
-        self.upper_y_position = random.randint(Pipe.UPPER_LIMIT-height, Pipe.BOTTOM_LIMIT-height)
+        self.upper_y_position = random.randint(Pipe.UPPER_LIMIT - height, Pipe.BOTTOM_LIMIT - height)
         self.bottom_y_position = self.upper_y_position + Pipe.GAP + self.upper_image.get_height()
-        self.velocity = 5
+        self.velocity = 5 * SPEED
+        self.passed = False
 
     def move(self):
         self.x_position -= self.velocity
@@ -88,7 +95,7 @@ class Base:
         self.image = pygame.image.load(os.path.join("images", "base.png"))
         self.x_position = 0
         self.y_position = WINDOW_HEIGHT - self.image.get_height()
-        self.velocity = 5
+        self.velocity = 5 * SPEED
 
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
@@ -97,7 +104,7 @@ class Base:
 class Game:
     BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 
-    def __init__(self):
+    def __init__(self, train, episodes=100):
         pygame.font.init()
         self.window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.fish = Fish()
@@ -107,22 +114,29 @@ class Game:
         self.score = 0
 
         self.last_time = 0
-        self.interval = 2750
+        self.interval = 2750 / SPEED  # połowa z 2750
 
         self.runs = True
         self.playing = True
 
-        self.agent = Agent(input_dim=4, output_dim=2)
+        self.train = train
+        self.agent = Agent(4,2)
+        if self.train:
+            self.agent.policy.load_state_dict(torch.load("flappy_agent.pt"))
+
         self.previous_state = self.get_state()
         self.previous_action = None
 
+        self.episodes = episodes
+        self.curr_episode = 0
+
     def get_state(self):
-        pipe = self.closestPipe() # rura, która jest najbliżej, ale której nie minął agent
+        pipe = self.closestPipe()  # rura, która jest najbliżej, ale której nie minął agent
         top, _ = pipe.get_borders()
         return [
-            self.fish.y_position, # wysokość agenta
-            self.fish.velocity, # prędkość agenta
-            pipe.x_position - self.fish.x_position, # odległość między agenetem a najbliższą rurą
+            self.fish.y_position,  # wysokość agenta
+            self.fish.velocity,  # prędkość agenta
+            (pipe.x_position - self.fish.x_position) / SPEED,  # odległość między agenetem a najbliższą rurą
             top - self.fish.y_position,  # różnica wysokości między agentem a dolną krawędzią górnej rury
         ]
         # górna krawędź dolnej rury się nie przyda, ponieważ jest to rzecz zależna od
@@ -149,6 +163,7 @@ class Game:
         self.playing = True
         self.previous_state = self.get_state()
         self.previous_action = None
+        self.curr_episode += 1
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -169,7 +184,7 @@ class Game:
         if not self.playing:
             return
 
-        self.clock.tick(30)
+        self.clock.tick(30 * SPEED)  # zmiana na 60 z 30
         current_state = self.get_state()
 
         action = self.agent.select_action(current_state)
@@ -208,34 +223,39 @@ class Game:
                 p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
 
                 reward = -1 + -4 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
-                print(reward)
+                # print(reward)
                 done = True
                 self.playing = False
 
-            if (pipe.x_position + pipe.upper_image.get_width()) == self.fish.x_position:
-                # jeżeli agent przejdzie szparę, dostaje dużą nagrodę
+            if not pipe.passed and pipe.x_position + pipe.upper_image.get_width() < self.fish.x_position:
+                pipe.passed = True
                 self.score += 1
-                reward = 5
+                reward = 10  # wcześniej 5
+                global best_score
+                if self.score > best_score:
+                    print(self.score)
+                    best_score = self.score
 
         for pipe in to_remove:
             self.pipes.remove(pipe)
 
         # dodanie wpisu stanu, akcji i jej konsekwencji do bufora pamięci oraz trenowanie agenta
-        if self.previous_action is not None:
-            self.agent.replay_buffer.push(
-                (self.previous_state,
-                self.previous_action,
-                current_state,
-                reward,
-                done)
-            )
-            self.agent.train()
+        if self.train:
+            if self.previous_action is not None:
+                self.agent.replay_buffer.push(
+                    (self.previous_state,
+                     self.previous_action,
+                     current_state,
+                     reward,
+                     done)
+                )
+                self.agent.train()
 
         self.previous_state = current_state
         self.previous_action = action
 
-        #print(self.pipes)
-        #print(self.get_state())
+        # print(self.pipes)
+        # print(self.get_state())
 
     def draw(self):
         self.window.blit(BACKGROUND_IMG, (0, 0))
@@ -247,20 +267,23 @@ class Game:
         text_surface = font.render(f"Score: {self.score}", True, (255, 255, 255))
         text = font.render(f"Score: {self.score}", True, (255, 255, 255))
         self.window.blit(text, (WINDOW_WIDTH - 150, 30))
-        #pygame.draw.line(self.window, (255, 0, 0), (0, 350), (WINDOW_WIDTH, 350), 2)
+        # pygame.draw.line(self.window, (255, 0, 0), (0, 350), (WINDOW_WIDTH, 350), 2)
         pygame.display.update()
 
     def game_loop(self):
-        while self.runs:
+        while self.runs and (not self.train or self.curr_episode < self.episodes):
+            print(self.curr_episode)
             if not self.playing:
                 self.restart()
             self.handle_events()
             self.update()
             self.draw()
 
+        if self.train:
+            torch.save(self.agent.policy.state_dict(), "flappy_agent.pt")
         pygame.quit()
 
 
 if __name__ == "__main__":
-    game = Game()
+    game = Game(train=False, episodes=10)
     game.game_loop()
