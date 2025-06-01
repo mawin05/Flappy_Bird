@@ -9,6 +9,8 @@ from pygame.math import VectorElementwiseProxy
 WINDOW_HEIGHT = 750
 WINDOW_WIDTH = 550
 BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
+SPEED = 20
+best_score = 0
 
 
 class Fish:
@@ -16,19 +18,20 @@ class Fish:
         self.x_position = 50
         self.y_position = WINDOW_HEIGHT / 3
         self.image = pygame.image.load(os.path.join("images", "flappy.png"))
-        self.velocity = -18
-        self.acceleration = 2
+        self.velocity = -18 #zmiana z -18 na -36
+        self.acceleration = 2 * SPEED #zmiana z 2 na 4
         self.alive = True
 
     def jump(self):
         self.velocity = -18
 
+
     def move(self):
         self.y_position += self.velocity
         self.velocity += self.acceleration
 
-        if self.velocity >= 20:
-            self.velocity = 20
+        if self.velocity >= 20 * SPEED: #zmiana z 20 na 40
+            self.velocity = 20 * SPEED
 
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
@@ -51,7 +54,7 @@ class Fish:
         return self.y_position <= 0
 
 class Pipe:
-    GAP = 220
+    GAP = 250
     UPPER_LIMIT = 50    # górna granica ograniczająca pozycję rury
     BOTTOM_LIMIT = 320  # dolna granica
 
@@ -62,7 +65,8 @@ class Pipe:
         height = self.upper_image.get_height()
         self.upper_y_position = random.randint(Pipe.UPPER_LIMIT-height, Pipe.BOTTOM_LIMIT-height)
         self.bottom_y_position = self.upper_y_position + Pipe.GAP + self.upper_image.get_height()
-        self.velocity = 5
+        self.velocity = 5 * SPEED
+        self.passed = False
 
     def move(self):
         self.x_position -= self.velocity
@@ -88,7 +92,7 @@ class Base:
         self.image = pygame.image.load(os.path.join("images", "base.png"))
         self.x_position = 0
         self.y_position = WINDOW_HEIGHT - self.image.get_height()
-        self.velocity = 5
+        self.velocity = 5 * SPEED
 
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
@@ -107,7 +111,7 @@ class Game:
         self.score = 0
 
         self.last_time = 0
-        self.interval = 2750
+        self.interval = 2750 / SPEED # połowa z 2750
 
         self.runs = True
         self.playing = True
@@ -169,7 +173,7 @@ class Game:
         if not self.playing:
             return
 
-        self.clock.tick(30)
+        self.clock.tick(30 * SPEED) #zmiana na 60 z 30
         current_state = self.get_state()
 
         action = self.agent.select_action(current_state)
@@ -208,14 +212,18 @@ class Game:
                 p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
 
                 reward = -1 + -4 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
-                print(reward)
+                #print(reward)
                 done = True
                 self.playing = False
 
-            if (pipe.x_position + pipe.upper_image.get_width()) == self.fish.x_position:
-                # jeżeli agent przejdzie szparę, dostaje dużą nagrodę
+            if not pipe.passed and pipe.x_position + pipe.upper_image.get_width() < self.fish.x_position:
+                pipe.passed = True
                 self.score += 1
-                reward = 5
+                reward = 10 # wcześniej 5
+                global best_score
+                if self.score > best_score:
+                    print(self.score)
+                    best_score = self.score
 
         for pipe in to_remove:
             self.pipes.remove(pipe)
