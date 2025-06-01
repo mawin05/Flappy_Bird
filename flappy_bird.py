@@ -11,6 +11,8 @@ WINDOW_WIDTH = 550
 BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 SPEED = 20
 best_score = 0
+score_counter = 0
+round_counter = 0
 
 
 class Fish:
@@ -222,7 +224,7 @@ class Game:
                 reward = 10 # wcześniej 5
                 global best_score
                 if self.score > best_score:
-                    print(self.score)
+                    #print(self.score)
                     best_score = self.score
 
         for pipe in to_remove:
@@ -260,7 +262,17 @@ class Game:
 
     def game_loop(self):
         while self.runs:
+            global round_counter
+            global score_counter
+
+            if round_counter == 20:     #wypisywanie średniego wyniku z ostatnich 20 rund
+                print("Średni wynik: "+str(score_counter/20))
+                round_counter = 0
+                score_counter = 0
+
             if not self.playing:
+                score_counter += self.score
+                round_counter += 1
                 self.restart()
             self.handle_events()
             self.update()
