@@ -12,7 +12,7 @@ from pygame.math import VectorElementwiseProxy
 WINDOW_HEIGHT = 750
 WINDOW_WIDTH = 550
 BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
-SPEED = 20
+SPEED = 1
 best_score = 0
 score_counter = 0
 round_counter = 0
@@ -23,8 +23,8 @@ class Fish:
         self.x_position = 50
         self.y_position = WINDOW_HEIGHT / 3
         self.image = pygame.image.load(os.path.join("images", "flappy.png"))
-        self.velocity = -18 #zmiana z -18 na -36
-        self.acceleration = 2 * SPEED #zmiana z 2 na 4
+        self.velocity = -18
+        self.acceleration = 2 * SPEED
 
 
     def jump(self):
@@ -201,12 +201,12 @@ class Game:
         self.fish.move()
 
         # defaultowo agent dostaje trochę punktów za przetrwanie
-        reward = 0.1
+        reward = 0.5
         done = False
 
         if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
             # jeżeli agent uderzy w barierkę dostaje dużą karę
-            reward = -5
+            reward = -10
             done = True
             self.playing = False
 
@@ -232,14 +232,20 @@ class Game:
                 reward = -1 + -4 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
                 #print(reward)
 
+
                 done = True
                 self.playing = False
 
             if not pipe.passed and pipe.x_position + pipe.upper_image.get_width() < self.fish.x_position:
                 pipe.passed = True
                 self.score += 1
+                # Po udanym przejściu sprawdzamy dodatkowo jak blisko był środka szczeliny
+                f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
+                p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
+                center_offset = abs(f_y - p_y) / (WINDOW_HEIGHT / 2)  # Normalizacja
+                reward = 10 - 2 * center_offset  # Maks 5, minimum np. 3
 
-                reward = 10 # wcześniej 5
+                reward += self.score
                 global best_score
                 if self.score > best_score:
                     #print(self.score)
@@ -303,5 +309,5 @@ class Game:
 
 
 if __name__ == "__main__":
-    game = Game(train=False, episodes=10)
+    game = Game(train=True, episodes=10)
     game.game_loop()
