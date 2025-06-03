@@ -22,7 +22,7 @@ class Agent:
         # aby zmniejszyć obliczony cost, robi to na podstawie gradientów wyliczych w backward()
         self.epsilon = 1.0 # wskaźnik eksploracji
         self.epsilon_min = 0.01 # minimalna eksploracja
-        self.epsilon_decay = 0.995 # spadek eksploracji
+        self.epsilon_decay = 0.9995 # spadek eksploracji
         self.train_step_counter = 0 # licznik kroków
 
     def select_action(self, state):
@@ -30,7 +30,7 @@ class Agent:
         # to wybieramy losową akcję
         # w przeciwnym wypadku wybieramy najlepszą akcję na podstawie policy
         if random.random() < self.epsilon:
-            return random.randint(0, 1)
+            return 1 if random.random() < 1 / 18 else 0
         else:
             state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             with torch.no_grad():
@@ -69,7 +69,7 @@ class Agent:
         # zmniejszenie wskaźnika eksploracji
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
-
+        #print(self.epsilon)
         self.train_step_counter += 1
         # aktualizacja target co X kroków
         if self.train_step_counter % self.network_sync_rate == 0:

@@ -12,8 +12,7 @@ from pygame.math import VectorElementwiseProxy
 WINDOW_HEIGHT = 750
 WINDOW_WIDTH = 550
 BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
-SPEED = 1
-best_score = 0
+SPEED = 2
 score_counter = 0
 round_counter = 0
 
@@ -23,21 +22,18 @@ class Fish:
         self.x_position = 50
         self.y_position = WINDOW_HEIGHT / 3
         self.image = pygame.image.load(os.path.join("images", "flappy.png"))
-        self.velocity = -18
-        self.acceleration = 2 * SPEED
-
+        self.velocity = -16
+        self.acceleration = 2
 
     def jump(self):
-        self.velocity = -18
-
+        self.velocity = -16
 
     def move(self):
         self.y_position += self.velocity
         self.velocity += self.acceleration
 
-
-        if self.velocity >= 20 * SPEED: #zmiana z 20 na 40
-            self.velocity = 20 * SPEED
+        if self.velocity >= 20:  # zmiana z 20 na 40
+            self.velocity = 20
 
     def draw(self, win):
         win.blit(self.image, (self.x_position, self.y_position))
@@ -62,7 +58,7 @@ class Fish:
 
 class Pipe:
     GAP = 250
-    UPPER_LIMIT = 50    # górna granica ograniczająca pozycję rury
+    UPPER_LIMIT = 50  # górna granica ograniczająca pozycję rury
     BOTTOM_LIMIT = 320  # dolna granica
 
     def __init__(self, x):
@@ -116,17 +112,16 @@ class Game:
         self.base = Base()
         self.clock = pygame.time.Clock()
         self.score = 0
+        self.best_score = 0
 
-        self.last_time = 0
-
-        self.interval = 2750 / SPEED # połowa z 2750
-
+        self.last_time = pygame.time.get_ticks()
+        self.interval = 3250 / SPEED  # połowa z 2750
 
         self.runs = True
         self.playing = True
 
         self.train = train
-        self.agent = Agent(4,2)
+        self.agent = Agent(4, 2)
         if not self.train:
             self.agent.policy.load_state_dict(torch.load("flappy_agent.pt"))
 
@@ -186,30 +181,16 @@ class Game:
                     else:
                         self.runs = False
 
-    def update(self):
-        if not self.playing:
-            return
-
-
-        self.clock.tick(30 * SPEED) #zmiana na 60 z 30
-        current_state = self.get_state()
-
-        action = self.agent.select_action(current_state)
-        if action == 1:
+    def step(self):
+        self.previous_state = self.get_state()
+        self.previous_action = self.agent.select_action(self.previous_state)
+        if self.previous_action == 1:
             self.fish.jump()
 
         self.fish.move()
+        self.handle_pipes()
 
-        # defaultowo agent dostaje trochę punktów za przetrwanie
-        reward = 0.5
-        done = False
-
-        if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
-            # jeżeli agent uderzy w barierkę dostaje dużą karę
-            reward = -10
-            done = True
-            self.playing = False
-
+    def handle_pipes(self):
         current_time = pygame.time.get_ticks()
 
         if current_time - self.last_time > self.interval:
@@ -223,54 +204,58 @@ class Game:
             if pipe.x_position + pipe.upper_image.get_width() < 0:
                 to_remove.append(pipe)
 
+        for pipe in to_remove:
+            self.pipes.remove(pipe)
+
+    def pipe_punishment(self, pipe):
+        f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
+        p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
+        return -1 + -4 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
+
+    def pipe_reward(self, pipe):
+        f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
+        p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
+        center_offset = abs(f_y - p_y) / (WINDOW_HEIGHT / 2)  # Normalizacja
+        return 10 - 2 * center_offset + self.score  # Maks 5, minimum np. 3
+
+    def get_reward(self):
+
+        if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
+            self.playing = False
+            return -10
+
+        for pipe in self.pipes:
             if self.fish.check_pipe_collision(pipe):
-                # jeżeli agent uderzy w rurę, dostaje karę, która zależy od odległości jego od środka szpary
-
-                f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
-                p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
-
-                reward = -1 + -4 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
-                #print(reward)
-
-
-                done = True
                 self.playing = False
+                return self.pipe_punishment(pipe)
 
             if not pipe.passed and pipe.x_position + pipe.upper_image.get_width() < self.fish.x_position:
                 pipe.passed = True
                 self.score += 1
-                # Po udanym przejściu sprawdzamy dodatkowo jak blisko był środka szczeliny
-                f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
-                p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
-                center_offset = abs(f_y - p_y) / (WINDOW_HEIGHT / 2)  # Normalizacja
-                reward = 10 - 2 * center_offset  # Maks 5, minimum np. 3
+                if self.score > self.best_score:
+                    self.best_score = self.score
+                return self.pipe_reward(pipe)
 
-                reward += self.score
-                global best_score
-                if self.score > best_score:
-                    #print(self.score)
-                    best_score = self.score
+        return 0.5
 
-        for pipe in to_remove:
-            self.pipes.remove(pipe)
+    def update(self):
+        if not self.playing:
+            return
+        #print(self.pipes)
+        self.clock.tick(30 * SPEED)
 
-        # dodanie wpisu stanu, akcji i jej konsekwencji do bufora pamięci oraz trenowanie agenta
+        self.step()
+
         if self.train:
             if self.previous_action is not None:
                 self.agent.replay_buffer.push(
                     (self.previous_state,
                      self.previous_action,
-                     current_state,
-                     reward,
-                     done)
+                     self.get_state(),
+                     self.get_reward(),
+                     not self.playing)
                 )
                 self.agent.train()
-
-        self.previous_state = current_state
-        self.previous_action = action
-
-        # print(self.pipes)
-        # print(self.get_state())
 
     def draw(self):
         self.window.blit(BACKGROUND_IMG, (0, 0))
@@ -286,12 +271,13 @@ class Game:
         pygame.display.update()
 
     def game_loop(self):
+        self.last_time = pygame.time.get_ticks()
         while self.runs:
             global round_counter
             global score_counter
 
-            if round_counter == 20:     #wypisywanie średniego wyniku z ostatnich 20 rund
-                print("Średni wynik: "+str(score_counter/20))
+            if round_counter == 20:  # wypisywanie średniego wyniku z ostatnich 20 rund
+                print("Średni wynik: " + str(score_counter / 20))
                 round_counter = 0
                 score_counter = 0
 
