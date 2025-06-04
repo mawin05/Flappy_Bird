@@ -5,6 +5,7 @@ import torch.optim as optim
 from collections import deque
 from dqn import DQN
 from ReplayBuffer import ReplayBuffer
+
 class Agent:
     def __init__(self, input_dim, output_dim):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -30,7 +31,7 @@ class Agent:
         # to wybieramy losową akcję
         # w przeciwnym wypadku wybieramy najlepszą akcję na podstawie policy
         if random.random() < self.epsilon:
-            return 1 if random.random() < 1 / 18 else 0
+            return 1 if random.random() < 1 / 20 else 0
         else:
             state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             with torch.no_grad():

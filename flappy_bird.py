@@ -2,10 +2,12 @@ import pygame
 import random
 import os
 import math
+import matplotlib.pyplot as plt
+from datetime import datetime
 
 import torch
 
-from Agent import Agent
+from Agent_class import Agent
 
 from pygame.math import VectorElementwiseProxy
 
@@ -13,14 +15,17 @@ WINDOW_HEIGHT = 750
 WINDOW_WIDTH = 550
 BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 SPEED = 2
+JUMP = 18
 
+rewards_per_game = []
+round_count = 0
 
 class Fish:
     def __init__(self):
         self.x_position = 50
         self.y_position = WINDOW_HEIGHT / 3
         self.image = pygame.image.load(os.path.join("images", "flappy.png"))
-        self.jump_velocity = -16
+        self.jump_velocity = -JUMP
         self.velocity = self.jump_velocity
         self.acceleration = 2
 
@@ -115,6 +120,8 @@ class Game:
         self.clock = pygame.time.Clock()
         self.score = 0
         self.best_score = 0
+        self.current_reward = 0
+        self.round_count = 0
 
         self.last_time = pygame.time.get_ticks()
         self.interval = 3250 / SPEED  # połowa z 2750
@@ -167,6 +174,9 @@ class Game:
         self.playing = True
         self.previous_state = self.get_state()
         self.previous_action = None
+        rewards_per_game.append(self.current_reward)
+        self.current_reward = 0
+        self.round_count += 1
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -253,6 +263,7 @@ class Game:
 
         if self.mode != "manual" and self.train:
             if self.previous_action is not None:
+                self.current_reward += reward
                 self.agent.replay_buffer.push(
                     (self.previous_state,
                      self.previous_action,
@@ -303,9 +314,16 @@ class Game:
                 torch.save(self.agent.policy.state_dict(), "flappy_agent.pt")
 
         pygame.quit()
+        if self.mode != 'manual' and self.train:
+            time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            plt.plot(list(range(self.round_count)), rewards_per_game)
+            plt.ylabel('Rewards')
+            plt.xlabel('Round number')
+            plt.savefig('graphs/wykres'+time+'.png')
+
 
 
 if __name__ == "__main__":
     #3 możliwe tryby: manual, train, test
-    game = Game(mode="test")
+    game = Game(mode="train")
     game.game_loop()
