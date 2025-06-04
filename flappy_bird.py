@@ -129,6 +129,7 @@ class Game:
             self.agent = Agent(4, 2)
             if not self.train:
                 self.agent.policy.load_state_dict(torch.load("flappy_agent.pt"))
+                self.agent.epsilon = 0
 
         self.previous_state = self.get_state()
         self.previous_action = None
@@ -306,5 +307,5 @@ class Game:
 
 if __name__ == "__main__":
     #3 możliwe tryby: manual, train, test
-    game = Game(mode="manual")
+    game = Game(mode="test")
     game.game_loop()
