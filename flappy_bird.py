@@ -13,8 +13,6 @@ WINDOW_HEIGHT = 750
 WINDOW_WIDTH = 550
 BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 SPEED = 2
-score_counter = 0
-round_counter = 0
 
 
 class Fish:
@@ -22,11 +20,12 @@ class Fish:
         self.x_position = 50
         self.y_position = WINDOW_HEIGHT / 3
         self.image = pygame.image.load(os.path.join("images", "flappy.png"))
-        self.velocity = -16
+        self.jump_velocity = -16
+        self.velocity = self.jump_velocity
         self.acceleration = 2
 
     def jump(self):
-        self.velocity = -16
+        self.velocity = self.jump_velocity
 
     def move(self):
         self.y_position += self.velocity
@@ -104,7 +103,10 @@ class Base:
 class Game:
     BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 
-    def __init__(self, train, episodes=100):
+    def __init__(self, mode="manual"):
+        if mode != "manual" and mode != "train" and mode != "test":
+            exit()
+        self.mode = mode
         pygame.font.init()
         self.window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.fish = Fish()
@@ -116,20 +118,20 @@ class Game:
 
         self.last_time = pygame.time.get_ticks()
         self.interval = 3250 / SPEED  # połowa z 2750
-
         self.runs = True
         self.playing = True
 
-        self.train = train
-        self.agent = Agent(4, 2)
-        if not self.train:
-            self.agent.policy.load_state_dict(torch.load("flappy_agent.pt"))
+        self.score_counter = 0
+        self.round_counter = 0
+
+        if self.mode != "manual":
+            self.train = self.mode == "train"
+            self.agent = Agent(4, 2)
+            if not self.train:
+                self.agent.policy.load_state_dict(torch.load("flappy_agent.pt"))
 
         self.previous_state = self.get_state()
         self.previous_action = None
-
-        self.episodes = episodes
-        self.curr_episode = 0
 
     def get_state(self):
         pipe = self.closestPipe()  # rura, która jest najbliżej, ale której nie minął agent
@@ -164,28 +166,29 @@ class Game:
         self.playing = True
         self.previous_state = self.get_state()
         self.previous_action = None
-        self.curr_episode += 1
 
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.runs = False
 
-            if event.type == pygame.KEYDOWN:
-                if self.playing:
-                    if event.key == pygame.K_SPACE:
-                        self.fish.jump()
-                else:
-                    if event.key == pygame.K_SPACE:
-                        self.restart()
+            if self.mode == "manual":
+                if event.type == pygame.KEYDOWN:
+                    if self.playing:
+                        if event.key == pygame.K_SPACE:
+                            self.fish.jump()
                     else:
-                        self.runs = False
+                        if event.key == pygame.K_SPACE:
+                            self.restart()
+                        else:
+                            self.runs = False
 
     def step(self):
-        self.previous_state = self.get_state()
-        self.previous_action = self.agent.select_action(self.previous_state)
-        if self.previous_action == 1:
-            self.fish.jump()
+        if self.mode != "manual":
+            self.previous_state = self.get_state()
+            self.previous_action = self.agent.select_action(self.previous_state)
+            if self.previous_action == 1:
+                self.fish.jump()
 
         self.fish.move()
         self.handle_pipes()
@@ -218,7 +221,7 @@ class Game:
         center_offset = abs(f_y - p_y) / (WINDOW_HEIGHT / 2)  # Normalizacja
         return 10 - 2 * center_offset + self.score  # Maks 5, minimum np. 3
 
-    def get_reward(self):
+    def check_collision(self):
 
         if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
             self.playing = False
@@ -245,14 +248,15 @@ class Game:
         self.clock.tick(30 * SPEED)
 
         self.step()
+        reward = self.check_collision()
 
-        if self.train:
+        if self.mode != "manual" and self.train:
             if self.previous_action is not None:
                 self.agent.replay_buffer.push(
                     (self.previous_state,
                      self.previous_action,
                      self.get_state(),
-                     self.get_reward(),
+                     reward,
                      not self.playing)
                 )
                 self.agent.train()
@@ -272,28 +276,35 @@ class Game:
 
     def game_loop(self):
         self.last_time = pygame.time.get_ticks()
-        while self.runs:
-            global round_counter
-            global score_counter
+        if self.mode == "manual":
+            while self.runs:
+                self.handle_events()
+                if self.playing:
+                    self.update()
+                    self.draw()
+        else:
+            while self.runs:
+                if self.round_counter == 20:
+                    print("Średni wynik: " + str(self.score_counter / 20))
+                    self.round_counter = 0
+                    self.score_counter = 0
 
-            if round_counter == 20:  # wypisywanie średniego wyniku z ostatnich 20 rund
-                print("Średni wynik: " + str(score_counter / 20))
-                round_counter = 0
-                score_counter = 0
+                if not self.playing:
+                    self.score_counter += self.score
+                    self.round_counter += 1
+                    self.restart()
 
-            if not self.playing:
-                score_counter += self.score
-                round_counter += 1
-                self.restart()
-            self.handle_events()
-            self.update()
-            self.draw()
+                self.handle_events()
+                self.update()
+                self.draw()
 
-        if self.train:
-            torch.save(self.agent.policy.state_dict(), "flappy_agent.pt")
+            if self.train:
+                torch.save(self.agent.policy.state_dict(), "flappy_agent.pt")
+
         pygame.quit()
 
 
 if __name__ == "__main__":
-    game = Game(train=True, episodes=10)
+    #3 możliwe tryby: manual, train, test
+    game = Game(mode="manual")
     game.game_loop()
