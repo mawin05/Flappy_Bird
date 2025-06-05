@@ -174,7 +174,7 @@ class Game:
         self.playing = True
         self.previous_state = self.get_state()
         self.previous_action = None
-        rewards_per_game.append(self.current_reward)
+        rewards_per_game.append(self.current_reward/self.round_count+1)
         self.current_reward = 0
         self.round_count += 1
 
@@ -288,6 +288,8 @@ class Game:
 
     def game_loop(self):
         self.last_time = pygame.time.get_ticks()
+        time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
         if self.mode == "manual":
             while self.runs:
                 self.handle_events()
@@ -311,11 +313,10 @@ class Game:
                 self.draw()
 
             if self.train:
-                torch.save(self.agent.policy.state_dict(), "flappy_agent.pt")
+                torch.save(self.agent.policy.state_dict(), "saved_agents/flappy_agent"+time+".pt")
 
         pygame.quit()
         if self.mode != 'manual' and self.train:
-            time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
             plt.plot(list(range(self.round_count)), rewards_per_game)
             plt.ylabel('Rewards')
             plt.xlabel('Round number')
