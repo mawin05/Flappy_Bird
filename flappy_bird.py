@@ -18,6 +18,8 @@ SPEED = 2
 JUMP = 18
 
 rewards_per_game = []
+rewards_per_20_games = []
+epsilon_per_game = []
 round_count = 0
 
 class Fish:
@@ -174,9 +176,14 @@ class Game:
         self.playing = True
         self.previous_state = self.get_state()
         self.previous_action = None
-        rewards_per_game.append(self.current_reward/self.round_count+1)
-        self.current_reward = 0
+        rewards_per_game.append(self.current_reward/(self.round_count+1))
+        epsilon_per_game.append(self.agent.epsilon)
         self.round_count += 1
+
+        if self.round_count % 20 == 0:
+            rewards_per_20_games.append(self.current_reward/20)
+
+        self.current_reward = 0
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -207,7 +214,7 @@ class Game:
     def handle_pipes(self):
         current_time = pygame.time.get_ticks()
 
-        if current_time - self.last_time > self.interval:
+        if self.pipes[-1].x_position < 10:
             new_pipe = Pipe(WINDOW_WIDTH)
             self.pipes.append(new_pipe)
             self.last_time = current_time
@@ -317,11 +324,16 @@ class Game:
 
         pygame.quit()
         if self.mode != 'manual' and self.train:
-            plt.plot(list(range(self.round_count)), rewards_per_game)
-            plt.ylabel('Rewards')
+            plt.plot([20 * (i+1) for i in range(len(rewards_per_20_games))], rewards_per_20_games)
+            plt.ylabel('Mean Rewards')
             plt.xlabel('Round number')
-            plt.savefig('graphs/wykres'+time+'.png')
+            plt.savefig('graphs/wykres_reward'+time+'.png')
 
+            plt.figure()
+            plt.plot(list(range(self.round_count)), epsilon_per_game)
+            plt.ylabel('Epsilon')
+            plt.xlabel('Round number')
+            plt.savefig('graphs/wykres_epsilon'+time+'.png')
 
 
 if __name__ == "__main__":
