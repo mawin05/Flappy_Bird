@@ -17,10 +17,12 @@ BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 SPEED = 2
 JUMP = 18
 
-rewards_per_game = []
+# rewards_per_game = []
 rewards_per_20_games = []
 epsilon_per_game = []
 round_count = 0
+best_reward = -float("inf")
+
 
 class Fish:
     def __init__(self):
@@ -123,6 +125,7 @@ class Game:
         self.score = 0
         self.best_score = 0
         self.current_reward = 0
+        self.last_rewards = 0
         self.round_count = 0
 
         self.last_time = pygame.time.get_ticks()
@@ -133,11 +136,13 @@ class Game:
         self.score_counter = 0
         self.round_counter = 0
 
+        self.time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
         if self.mode != "manual":
             self.train = self.mode == "train"
             self.agent = Agent(4, 2)
             if not self.train:
-                self.agent.policy.load_state_dict(torch.load("saved_agents/flappy_agent2025-06-07-00-25-27.pt"))
+                self.agent.policy.load_state_dict(torch.load("saved_agents/flappy_agent2025-06-07-19-20-23.pt"))
                 self.agent.epsilon = 0
 
         self.previous_state = self.get_state()
@@ -176,14 +181,22 @@ class Game:
         self.playing = True
         self.previous_state = self.get_state()
         self.previous_action = None
-        rewards_per_game.append(self.current_reward/(self.round_count+1))
+        # rewards_per_game.append(self.current_reward/(self.round_count+1))
         epsilon_per_game.append(self.agent.epsilon)
+        self.agent.update()
         self.round_count += 1
+        global best_reward
+        if self.current_reward > best_reward:
+            best_reward = self.current_reward
+            print("New best reward: " + str(best_reward) + "!")
+            self.save_agent()
+
+        self.last_rewards += self.current_reward
+        self.current_reward = 0
 
         if self.round_count % 20 == 0:
-            rewards_per_20_games.append(self.current_reward/20)
-
-        self.current_reward = 0
+            rewards_per_20_games.append(self.last_rewards / 20)
+            self.last_rewards = 0
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -231,7 +244,7 @@ class Game:
     def pipe_punishment(self, pipe):
         f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
         p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
-        return -1 + -4 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
+        return -5 + -5 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
 
     def pipe_reward(self, pipe):
         f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
@@ -243,7 +256,7 @@ class Game:
 
         if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
             self.playing = False
-            return -10
+            return -20
 
         for pipe in self.pipes:
             if self.fish.check_pipe_collision(pipe):
@@ -257,12 +270,12 @@ class Game:
                     self.best_score = self.score
                 return self.pipe_reward(pipe)
 
-        return 0.5
+        return 0.1
 
     def update(self):
         if not self.playing:
             return
-        #print(self.pipes)
+        # print(self.pipes)
         self.clock.tick(30 * SPEED)
 
         self.step()
@@ -293,9 +306,11 @@ class Game:
         # pygame.draw.line(self.window, (255, 0, 0), (0, 350), (WINDOW_WIDTH, 350), 2)
         pygame.display.update()
 
+    def save_agent(self):
+        torch.save(self.agent.policy.state_dict(), "saved_agents/flappy_agent" + self.time + ".pt")
+
     def game_loop(self):
         self.last_time = pygame.time.get_ticks()
-        time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
         if self.mode == "manual":
             while self.runs:
@@ -319,24 +334,21 @@ class Game:
                 self.update()
                 self.draw()
 
-            if self.train:
-                torch.save(self.agent.policy.state_dict(), "saved_agents/flappy_agent"+time+".pt")
-
         pygame.quit()
         if self.mode != 'manual' and self.train:
-            plt.plot([20 * (i+1) for i in range(len(rewards_per_20_games))], rewards_per_20_games)
+            plt.plot([20 * (i + 1) for i in range(len(rewards_per_20_games))], rewards_per_20_games)
             plt.ylabel('Mean Rewards')
             plt.xlabel('Round number')
-            plt.savefig('graphs/wykres_reward'+time+'.png')
+            plt.savefig('graphs/wykres_reward' + self.time + '.png')
 
             plt.figure()
             plt.plot(list(range(self.round_count)), epsilon_per_game)
             plt.ylabel('Epsilon')
             plt.xlabel('Round number')
-            plt.savefig('graphs/wykres_epsilon'+time+'.png')
+            plt.savefig('graphs/wykres_epsilon' + self.time + '.png')
 
 
 if __name__ == "__main__":
-    #3 możliwe tryby: manual, train, test
-    game = Game(mode="test")
+    # 3 możliwe tryby: manual, train, test
+    game = Game(mode="train")
     game.game_loop()

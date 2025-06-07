@@ -6,25 +6,27 @@ from collections import deque
 from dqn import DQN
 from ReplayBuffer import ReplayBuffer
 
+
 class Agent:
     def __init__(self, input_dim, output_dim):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.policy = DQN(input_dim, output_dim).to(self.device) # warstwa danych wejściowych
-        self.target = DQN(input_dim, output_dim).to(self.device) # warstwa danych wyjściowych (Nic nie rób, albo skacz)
-        self.target.load_state_dict(self.policy.state_dict()) # kopiujemy policy do target
+        self.policy = DQN(input_dim, output_dim).to(self.device)  # warstwa danych wejściowych
+        self.target = DQN(input_dim, output_dim).to(self.device)  # warstwa danych wyjściowych (Nic nie rób, albo skacz)
+        self.target.load_state_dict(self.policy.state_dict())  # kopiujemy policy do target
 
-        self.alpha = 0.001 # learning rate
-        self.gamma = 0.9 # discount rate
-        self.network_sync_rate = 1000 # liczba kroków, która jest potrzeba do synchronizacji target z policy
-        self.replay_buffer = ReplayBuffer(10000) # inicjalizacja buffora pamięci
-        self.batch_size = 64 # wielkośc próbek jakie będziemy losowo wybierać z buffora pamięci do trenowania policy
-        self.cost_function = nn.MSELoss() # funkja do oceny rozbieżności między obecnym stanem policy a oczekiwanym
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.alpha) # aktualizuje wagi i biasy sieci neuronowej
+        self.alpha = 0.0001  # learning rate
+        self.gamma = 0.99  # discount rate
+        self.network_sync_rate = 1000  # liczba kroków, która jest potrzeba do synchronizacji target z policy
+        self.replay_buffer = ReplayBuffer(100000)  # inicjalizacja buffora pamięci
+        self.batch_size = 32  # wielkośc próbek jakie będziemy losowo wybierać z buffora pamięci do trenowania policy
+        self.cost_function = nn.MSELoss()  # funkja do oceny rozbieżności między obecnym stanem policy a oczekiwanym
+        self.optimizer = optim.Adam(self.policy.parameters(),
+                                    lr=self.alpha)  # aktualizuje wagi i biasy sieci neuronowej
         # aby zmniejszyć obliczony cost, robi to na podstawie gradientów wyliczych w backward()
-        self.epsilon = 1.0 # wskaźnik eksploracji
-        self.epsilon_min = 0.01 # minimalna eksploracja
-        self.epsilon_decay = 0.9995 # spadek eksploracji
-        self.train_step_counter = 0 # licznik kroków
+        self.epsilon = 1.0  # wskaźnik eksploracji
+        self.epsilon_min = 0.01  # minimalna eksploracja
+        self.epsilon_decay = 0.995  # spadek eksploracji
+        self.train_step_counter = 0  # licznik kroków
 
     def select_action(self, state):
         # jeżeli losowa liczba jest mniejsza niż wskaźnik eksploracji
@@ -40,7 +42,7 @@ class Agent:
 
     def train(self):
         if len(self.replay_buffer) < self.batch_size:
-            return # nie trenujemy dopóki nie mamy wystarczającej liczby doświadczeń
+            return  # nie trenujemy dopóki nie mamy wystarczającej liczby doświadczeń
 
         # pobieramy losowo wybrane dane dotyczących akcji i ich konsekwencji z bufora pamięci
         states, actions, new_states, rewards, dones = self.replay_buffer.sample(self.batch_size)
@@ -67,14 +69,16 @@ class Agent:
         cost.backward()
         self.optimizer.step()
 
-        # zmniejszenie wskaźnika eksploracji
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-        #print(self.epsilon)
         self.train_step_counter += 1
-        # aktualizacja target co X kroków
         if self.train_step_counter % self.network_sync_rate == 0:
             self.update_target()
+
+        # print(self.epsilon)
+
+    def update(self):
+        # zmniejszenie wskaźnika eksploracji
+        if self.epsilon > self.epsilon_min:
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
     def update_target(self):
         self.target.load_state_dict(self.policy.state_dict())
