@@ -25,7 +25,7 @@ class Agent:
         # aby zmniejszyć obliczony cost, robi to na podstawie gradientów wyliczych w backward()
         self.epsilon = 1.0  # wskaźnik eksploracji
         self.epsilon_min = 0.01  # minimalna eksploracja
-        self.epsilon_decay = 0.995  # spadek eksploracji
+        self.epsilon_decay = 0.9995  # spadek eksploracji
         self.train_step_counter = 0  # licznik kroków
 
     def select_action(self, state):

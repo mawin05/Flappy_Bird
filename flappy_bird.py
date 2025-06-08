@@ -112,9 +112,12 @@ class Base:
 class Game:
     BACKGROUND_IMG = pygame.image.load(os.path.join("images", "background.png"))
 
-    def __init__(self, mode="manual"):
+    def __init__(self, mode="manual", filename=None):
         if mode != "manual" and mode != "train" and mode != "test":
             exit()
+        if mode == "test" and filename is None:
+            exit()
+
         self.mode = mode
         pygame.font.init()
         self.window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -137,13 +140,15 @@ class Game:
         self.round_counter = 0
 
         self.time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        self.filename = filename
+
+        if mode == "train" and self.filename is None:
+            self.filename = "agent_" + self.time + ".pt"
 
         if self.mode != "manual":
             self.train = self.mode == "train"
             self.agent = Agent(4, 2)
-            if not self.train:
-                self.agent.policy.load_state_dict(torch.load("saved_agents/flappy_agent2025-06-08-10-07-42.pt"))
-                self.agent.epsilon = 0
+            self.load_agent()
 
         self.previous_state = self.get_state()
         self.previous_action = None
@@ -188,6 +193,7 @@ class Game:
         if self.train:
             global best_reward
             if self.current_reward > best_reward:
+                self.log("New best reward: " + str(self.current_reward) + "!")
                 best_reward = self.current_reward
                 print("New best reward: " + str(best_reward) + "!")
                 self.save_agent()
@@ -277,7 +283,7 @@ class Game:
         if not self.playing:
             return
         # print(self.pipes)
-        #self.clock.tick(30 * SPEED)
+        self.clock.tick(30 * SPEED)
 
         self.step()
         reward = self.check_collision()
@@ -308,11 +314,60 @@ class Game:
         pygame.display.update()
 
     def save_agent(self):
-        torch.save(self.agent.policy.state_dict(), "saved_agents/flappy_agent" + self.time + ".pt")
+        path = "saved_agents/" + self.filename
+        torch.save(self.agent.policy.state_dict(), path)
+        self.log("Agent saved")
+
+    def save_training_agent(self):
+        path = "training_agents/" + self.filename
+        global best_reward
+        global rewards_per_20_games
+        global epsilon_per_game
+        torch.save({
+            'policy_state_dict': self.agent.policy.state_dict(),
+            'target_state_dict': self.agent.target.state_dict(),
+            'optimizer_state_dict': self.agent.optimizer.state_dict(),
+            'epsilon': self.agent.epsilon,
+            'replay_buffer': self.agent.replay_buffer,
+            'episode': self.agent.train_step_counter,
+            'best_reward': best_reward,
+            'rewards_history': rewards_per_20_games,
+            'epsilon_history': epsilon_per_game
+        }, path)
+        self.log("End of training")
+
+    def load_agent(self):
+        if self.train:
+            self.log("Start of training")
+            path = "training_agents/" + self.filename
+            if os.path.exists(path):
+                checkpoint = torch.load(path, weights_only=False)
+                global best_reward
+                global rewards_per_20_games
+                global epsilon_per_game
+                self.agent.policy.load_state_dict(checkpoint['policy_state_dict'])
+                self.agent.target.load_state_dict(checkpoint['target_state_dict'])
+                self.agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                self.agent.epsilon = checkpoint['epsilon']
+                self.agent.replay_buffer = checkpoint['replay_buffer']
+                self.agent.train_step_counter = checkpoint['episode']
+                best_reward = checkpoint['best_reward']
+                rewards_per_20_games = checkpoint['rewards_history']
+                epsilon_per_game = checkpoint['epsilon_history']
+        else:
+            path = "saved_agents/" + self.filename
+            self.agent.policy.load_state_dict(torch.load(path))
+            self.agent.epsilon = 0
+
+    def log(self, message):
+        path = "logs/log_" + self.filename + ".txt"
+        time_str = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        with open(path, "a") as f:
+            f.write(f"{time_str} {message}\n")
 
     def game_loop(self):
         self.last_time = pygame.time.get_ticks()
-
+        global best_reward
         if self.mode == "manual":
             while self.runs:
                 self.handle_events()
@@ -321,6 +376,7 @@ class Game:
                     self.draw()
         else:
             while self.runs:
+                #print(str(self.agent.epsilon) + "   " + str(best_reward) + "   " + str(len(self.agent.replay_buffer.buffer)))
                 if self.round_counter == 20:
                     print("Średni wynik: " + str(self.score_counter / 20))
                     self.round_counter = 0
@@ -337,19 +393,20 @@ class Game:
 
         pygame.quit()
         if self.mode != 'manual' and self.train:
-            plt.plot([20 * (i + 1) for i in range(len(rewards_per_20_games))], rewards_per_20_games)
+            self.save_training_agent()
+            plt.plot(rewards_per_20_games)
             plt.ylabel('Mean Rewards')
             plt.xlabel('Round number')
-            plt.savefig('graphs/wykres_reward' + self.time + '.png')
+            plt.savefig('graphs/rewards_' + self.filename + '.png')
 
             plt.figure()
-            plt.plot(list(range(self.round_count)), epsilon_per_game)
+            plt.plot(epsilon_per_game)
             plt.ylabel('Epsilon')
             plt.xlabel('Round number')
-            plt.savefig('graphs/wykres_epsilon' + self.time + '.png')
+            plt.savefig('graphs/epsilon_' + self.filename + '.png')
 
 
 if __name__ == "__main__":
     # 3 możliwe tryby: manual, train, test
-    game = Game(mode="manual")
+    game = Game(mode="train", filename="bestAgent.pt")
     game.game_loop()
