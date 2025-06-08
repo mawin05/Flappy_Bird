@@ -142,7 +142,7 @@ class Game:
             self.train = self.mode == "train"
             self.agent = Agent(4, 2)
             if not self.train:
-                self.agent.policy.load_state_dict(torch.load("saved_agents/flappy_agent2025-06-07-19-20-23.pt"))
+                self.agent.policy.load_state_dict(torch.load("saved_agents/flappy_agent2025-06-08-10-07-42.pt"))
                 self.agent.epsilon = 0
 
         self.previous_state = self.get_state()
@@ -185,11 +185,12 @@ class Game:
         epsilon_per_game.append(self.agent.epsilon)
         self.agent.update()
         self.round_count += 1
-        global best_reward
-        if self.current_reward > best_reward:
-            best_reward = self.current_reward
-            print("New best reward: " + str(best_reward) + "!")
-            self.save_agent()
+        if self.train:
+            global best_reward
+            if self.current_reward > best_reward:
+                best_reward = self.current_reward
+                print("New best reward: " + str(best_reward) + "!")
+                self.save_agent()
 
         self.last_rewards += self.current_reward
         self.current_reward = 0
@@ -276,7 +277,7 @@ class Game:
         if not self.playing:
             return
         # print(self.pipes)
-        self.clock.tick(30 * SPEED)
+        #self.clock.tick(30 * SPEED)
 
         self.step()
         reward = self.check_collision()
@@ -350,5 +351,5 @@ class Game:
 
 if __name__ == "__main__":
     # 3 możliwe tryby: manual, train, test
-    game = Game(mode="train")
+    game = Game(mode="manual")
     game.game_loop()
