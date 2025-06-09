@@ -408,5 +408,5 @@ class Game:
 
 if __name__ == "__main__":
     # 3 możliwe tryby: manual, train, test
-    game = Game(mode="train", filename="bestAgent.pt")
+    game = Game(mode="test", filename="bestAgent.pt")
     game.game_loop()
