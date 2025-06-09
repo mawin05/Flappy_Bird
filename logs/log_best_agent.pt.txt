@@ -1,8 +1,0 @@
-[2025-06-08 23:10:39] Start of training
-[2025-06-08 23:13:01] New best reward: 29.384784514790724!
-[2025-06-08 23:13:01] Agent saved
-[2025-06-08 23:14:43] New best reward: 32.36266666666682!
-[2025-06-08 23:14:43] Agent saved
-[2025-06-08 23:15:39] End of training
-[2025-06-08 23:17:24] Start of training
-[2025-06-08 23:19:26] End of training

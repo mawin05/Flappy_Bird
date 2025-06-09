@@ -143,7 +143,7 @@ class Game:
         self.filename = filename
 
         if mode == "train" and self.filename is None:
-            self.filename = "agent_" + self.time + ".pt"
+            self.filename = "agent_" + self.time
 
         if self.mode != "manual":
             self.train = self.mode == "train"
@@ -187,10 +187,10 @@ class Game:
         self.previous_state = self.get_state()
         self.previous_action = None
         # rewards_per_game.append(self.current_reward/(self.round_count+1))
-        epsilon_per_game.append(self.agent.epsilon)
-        self.agent.update()
         self.round_count += 1
-        if self.train:
+        if self.mode != "manual" and self.train:
+            epsilon_per_game.append(self.agent.epsilon)
+            self.agent.update()
             global best_reward
             if self.current_reward > best_reward:
                 self.log("New best reward: " + str(self.current_reward) + "!")
@@ -314,12 +314,12 @@ class Game:
         pygame.display.update()
 
     def save_agent(self):
-        path = "saved_agents/" + self.filename
+        path = "saved_agents/" + self.filename + ".pt"
         torch.save(self.agent.policy.state_dict(), path)
         self.log("Agent saved")
 
     def save_training_agent(self):
-        path = "training_agents/" + self.filename
+        path = "training_agents/" + self.filename + ".pt"
         global best_reward
         global rewards_per_20_games
         global epsilon_per_game
@@ -339,7 +339,7 @@ class Game:
     def load_agent(self):
         if self.train:
             self.log("Start of training")
-            path = "training_agents/" + self.filename
+            path = "training_agents/" + self.filename + ".pt"
             if os.path.exists(path):
                 checkpoint = torch.load(path, weights_only=False)
                 global best_reward
@@ -355,7 +355,7 @@ class Game:
                 rewards_per_20_games = checkpoint['rewards_history']
                 epsilon_per_game = checkpoint['epsilon_history']
         else:
-            path = "saved_agents/" + self.filename
+            path = "saved_agents/" + self.filename + ".pt"
             self.agent.policy.load_state_dict(torch.load(path))
             self.agent.epsilon = 0
 
@@ -408,5 +408,5 @@ class Game:
 
 if __name__ == "__main__":
     # 3 możliwe tryby: manual, train, test
-    game = Game(mode="test", filename="bestAgent.pt")
+    game = Game(mode="test", filename="bestAgent")
     game.game_loop()
