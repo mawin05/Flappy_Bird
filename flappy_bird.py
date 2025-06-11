@@ -24,6 +24,13 @@ round_count = 0
 best_reward = -float("inf")
 
 
+def median(arr):
+    mid = len(arr) // 2
+    if len(arr) % 2 == 1:
+        return arr[mid]
+    return (arr[mid] + arr[mid - 1]) / 2
+
+
 class Fish:
     def __init__(self):
         self.x_position = 50
@@ -127,6 +134,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.score = 0
         self.best_score = 0
+        self.worst_score = float("inf")
         self.current_reward = 0
         self.last_rewards = 0
         self.round_count = 0
@@ -138,6 +146,7 @@ class Game:
 
         self.score_counter = 0
         self.round_counter = 0
+        self.games_history = []
 
         self.time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         self.filename = filename
@@ -186,7 +195,6 @@ class Game:
         self.playing = True
         self.previous_state = self.get_state()
         self.previous_action = None
-        # rewards_per_game.append(self.current_reward/(self.round_count+1))
         self.round_count += 1
         if self.mode != "manual" and self.train:
             epsilon_per_game.append(self.agent.epsilon)
@@ -198,12 +206,12 @@ class Game:
                 print("New best reward: " + str(best_reward) + "!")
                 self.save_agent()
 
-        self.last_rewards += self.current_reward
-        self.current_reward = 0
+            self.last_rewards += self.current_reward
+            self.current_reward = 0
 
-        if self.round_count % 20 == 0:
-            rewards_per_20_games.append(self.last_rewards / 20)
-            self.last_rewards = 0
+            if self.round_count % 20 == 0:
+                rewards_per_20_games.append(self.last_rewards / 20)
+                self.last_rewards = 0
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -273,8 +281,6 @@ class Game:
             if not pipe.passed and pipe.x_position + pipe.upper_image.get_width() < self.fish.x_position:
                 pipe.passed = True
                 self.score += 1
-                if self.score > self.best_score:
-                    self.best_score = self.score
                 return self.pipe_reward(pipe)
 
         return 0.1
@@ -282,7 +288,7 @@ class Game:
     def update(self):
         if not self.playing:
             return
-        # print(self.pipes)
+
         self.clock.tick(30 * SPEED)
 
         self.step()
@@ -365,6 +371,19 @@ class Game:
         with open(path, "a") as f:
             f.write(f"{time_str} {message}\n")
 
+    def save_graphs(self):
+        self.save_training_agent()
+        plt.plot(rewards_per_20_games)
+        plt.ylabel('Mean Rewards')
+        plt.xlabel('Round number')
+        plt.savefig('graphs/rewards_' + self.filename + '.png')
+
+        plt.figure()
+        plt.plot(epsilon_per_game)
+        plt.ylabel('Epsilon')
+        plt.xlabel('Round number')
+        plt.savefig('graphs/epsilon_' + self.filename + '.png')
+
     def game_loop(self):
         self.last_time = pygame.time.get_ticks()
         global best_reward
@@ -376,15 +395,21 @@ class Game:
                     self.draw()
         else:
             while self.runs:
-                #print(str(self.agent.epsilon) + "   " + str(best_reward) + "   " + str(len(self.agent.replay_buffer.buffer)))
-                if self.round_counter == 20:
-                    print("Średni wynik: " + str(self.score_counter / 20))
+                if self.train and self.round_counter == 20:
+                    print("Average score: " + str(self.score_counter / 20))
                     self.round_counter = 0
                     self.score_counter = 0
 
                 if not self.playing:
                     self.score_counter += self.score
                     self.round_counter += 1
+                    self.best_score = max(self.best_score, self.score)
+                    self.worst_score = min(self.worst_score, self.score)
+                    if not self.train:
+                        self.games_history.append(self.score)
+                        self.games_history = sorted(self.games_history)
+                        print(f"{self.round_counter}. Average: {self.score_counter / self.round_counter:.2f}, Median: "
+                              f"{median(self.games_history)}, Range: {self.worst_score} - {self.best_score}")
                     self.restart()
 
                 self.handle_events()
@@ -393,20 +418,10 @@ class Game:
 
         pygame.quit()
         if self.mode != 'manual' and self.train:
-            self.save_training_agent()
-            plt.plot(rewards_per_20_games)
-            plt.ylabel('Mean Rewards')
-            plt.xlabel('Round number')
-            plt.savefig('graphs/rewards_' + self.filename + '.png')
-
-            plt.figure()
-            plt.plot(epsilon_per_game)
-            plt.ylabel('Epsilon')
-            plt.xlabel('Round number')
-            plt.savefig('graphs/epsilon_' + self.filename + '.png')
+            self.save_graphs()
 
 
 if __name__ == "__main__":
     # 3 możliwe tryby: manual, train, test
-    game = Game(mode="test", filename="bestAgent")
+    game = Game(mode="test", filename="1hour")
     game.game_loop()
