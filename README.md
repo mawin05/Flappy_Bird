@@ -1,2 +1,4 @@
 # Flappy_Bird
-Simple "Flappy Bird" game implementation for later AI project.
+Implementacja Deep Q-Learning: Agent grający w grę typu "Flappy Bird"
+
+[Pobierz sprawozdanie](Sprawozdanie.pdf)
