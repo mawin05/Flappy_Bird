@@ -32,3 +32,5 @@
 [2025-06-11 21:47:36] New best reward: 205.73511999536893!
 [2025-06-11 21:47:36] Agent saved
 [2025-06-11 21:47:47] End of training
+[2025-06-12 19:15:15] Start of training
+[2025-06-12 19:15:38] End of training

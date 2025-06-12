@@ -47,7 +47,7 @@ class Fish:
         self.y_position += self.velocity
         self.velocity += self.acceleration
 
-        if self.velocity >= 20:  # zmiana z 20 na 40
+        if self.velocity >= 20:
             self.velocity = 20
 
     def draw(self, win):
@@ -140,7 +140,7 @@ class Game:
         self.round_count = 0
 
         self.last_time = pygame.time.get_ticks()
-        self.interval = 3250 / SPEED  # połowa z 2750
+        self.interval = 3250 / SPEED
         self.runs = True
         self.playing = True
 
@@ -187,6 +187,7 @@ class Game:
         return self.pipes[0]
 
     def restart(self):
+        # restartowanie parametrów gry po zakończonym epizodzie
         self.fish = Fish()
         self.pipes.clear()
         self.pipes.append(Pipe(WINDOW_WIDTH))
@@ -200,6 +201,7 @@ class Game:
             epsilon_per_game.append(self.agent.epsilon)
             self.agent.update()
             global best_reward
+            # sprawdzanie najlepszego wyniku i potencjalny zapis agenta
             if self.current_reward > best_reward:
                 self.log("New best reward: " + str(self.current_reward) + "!")
                 best_reward = self.current_reward
@@ -214,6 +216,7 @@ class Game:
                 self.last_rewards = 0
 
     def handle_events(self):
+        # obsługiwanie ruchów gracza
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.runs = False
@@ -230,6 +233,7 @@ class Game:
                             self.runs = False
 
     def step(self):
+        # funkcja, która odpowiada za ruch postaci i rur w grze
         if self.mode != "manual":
             self.previous_state = self.get_state()
             self.previous_action = self.agent.select_action(self.previous_state)
@@ -240,6 +244,7 @@ class Game:
         self.handle_pipes()
 
     def handle_pipes(self):
+        # funkcja, która usuwa niepotrzebne rury i dodaje nowe
         current_time = pygame.time.get_ticks()
 
         if self.pipes[-1].x_position < 10:
@@ -257,18 +262,21 @@ class Game:
             self.pipes.remove(pipe)
 
     def pipe_punishment(self, pipe):
+        # funkcja obliczająca karę za uderzenie w rurę
         f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
         p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
         return -5 + -5 * math.sqrt((f_x - p_x) ** 2 + (f_y - p_y) ** 2) / WINDOW_HEIGHT
 
     def pipe_reward(self, pipe):
+        # funkcja obliczająca nagrodę za ominięcie rury
         f_x, f_y = self.fish.x_position, self.fish.y_position + self.fish.image.get_height() / 2
         p_x, p_y = pipe.x_position + pipe.upper_image.get_width(), pipe.get_borders()[0] + pipe.GAP / 2
         center_offset = abs(f_y - p_y) / (WINDOW_HEIGHT / 2)  # Normalizacja
         return 10 - 2 * center_offset + self.score  # Maks 5, minimum np. 3
 
     def check_collision(self):
-
+        # funkcja sprawdzająca wszelkie kolizje z otoczeniem i rurami
+        # zwraca nagrodę na podstawie kolizji
         if self.fish.check_base_collision(self.base) or self.fish.check_roof_collision():
             self.playing = False
             return -20
@@ -286,6 +294,7 @@ class Game:
         return 0.1
 
     def update(self):
+        # funkcja aktualizująca stan gry
         if not self.playing:
             return
 
@@ -307,6 +316,7 @@ class Game:
                 self.agent.train()
 
     def draw(self):
+        # rysowanie okna
         self.window.blit(BACKGROUND_IMG, (0, 0))
         for pipe in self.pipes:
             pipe.draw(self.window)
@@ -320,11 +330,13 @@ class Game:
         pygame.display.update()
 
     def save_agent(self):
+        # zapisywanie najlepszego agenta
         path = "saved_agents/" + self.filename + ".pt"
         torch.save(self.agent.policy.state_dict(), path)
         self.log("Agent saved")
 
     def save_training_agent(self):
+        # zapisywanie agenta do potencjalnego dalszego treningu
         path = "training_agents/" + self.filename + ".pt"
         global best_reward
         global rewards_per_20_games
@@ -343,6 +355,8 @@ class Game:
         self.log("End of training")
 
     def load_agent(self):
+        # wczytywanie agenta do dalszego treningu
+        # lub do testowania
         if self.train:
             self.log("Start of training")
             path = "training_agents/" + self.filename + ".pt"
@@ -372,16 +386,19 @@ class Game:
             f.write(f"{time_str} {message}\n")
 
     def save_graphs(self):
+        # zapisywanie wykresów z treningu
         self.save_training_agent()
-        plt.plot(rewards_per_20_games)
-        plt.ylabel('Mean Rewards')
-        plt.xlabel('Round number')
+        plt.plot([(i+1)*20 for i in range(len(rewards_per_20_games))], rewards_per_20_games)
+        plt.ylabel('Średnie nagrody')
+        plt.xlabel('Nr epizodu')
+        plt.title("Wykres średnich nagród względem liczby epizodów")
         plt.savefig('graphs/rewards_' + self.filename + '.png')
 
         plt.figure()
         plt.plot(epsilon_per_game)
         plt.ylabel('Epsilon')
-        plt.xlabel('Round number')
+        plt.xlabel('Nr epizodu')
+        plt.title("Wykres wartości współczynnika eksploracji w trakcie treningu")
         plt.savefig('graphs/epsilon_' + self.filename + '.png')
 
     def game_loop(self):
